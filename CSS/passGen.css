@@ -1,0 +1,38 @@
+body{
+    background:#398fe7   ;
+}
+.mybtn{
+    padding: 20px;
+    font-size: 40px;
+
+    
+}
+.container{
+    margin:0 auto;
+    margin-top: 200px;
+    width: 600px;
+    font-size: 3em;
+}
+.out{
+    margin-bottom: 10px;
+    width: 100%;
+    text-align: center;
+    color: orangered;
+}
+.key{
+    margin-top: auto;
+    width: 400px;
+    float: left;
+    background-color: #f63;
+    padding: 2px;
+    color: white;
+}
+
+.in{
+    float: right;
+    width: 150px;
+    text-align: center;
+    color: orangered;
+    
+    
+}
