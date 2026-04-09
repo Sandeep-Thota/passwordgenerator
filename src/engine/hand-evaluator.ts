@@ -326,7 +326,30 @@ export function getHandStrength(
 ): number {
   if (holeCards.length === 0) return 0;
 
+  const allCards = [...holeCards, ...communityCards];
+  if (allCards.length < 5) {
+    // Not enough cards to evaluate a full hand — estimate from hole cards alone
+    const RANK_VALUES_MAP: Record<string, number> = {
+      '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8,
+      '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14,
+    };
+    const values = holeCards.map(c => RANK_VALUES_MAP[c.rank] || 0);
+    const maxVal = Math.max(...values);
+    const isPair = holeCards.length >= 2 && holeCards[0].rank === holeCards[1].rank;
+    const isSuited = holeCards.length >= 2 && holeCards[0].suit === holeCards[1].suit;
+    let strength = (maxVal / 14) * 40; // base from high card
+    if (isPair) strength += 30;
+    if (isSuited) strength += 8;
+    if (holeCards.length >= 2) {
+      const gap = Math.abs(values[0] - values[1]);
+      if (gap <= 2) strength += 10; // connected
+    }
+    return Math.min(100, Math.round(strength));
+  }
+
   const result = evaluateHand(holeCards, communityCards, variant);
+  if (!result) return 0;
+
   const rankings = variant === 'short-deck' ? SHORT_DECK_RANKINGS : HAND_RANKINGS;
 
   // Normalize score to 0-100
