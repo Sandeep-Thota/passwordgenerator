@@ -2,7 +2,7 @@
 // PokerZone - Root Layout
 // ==========================================
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, StyleSheet } from 'react-native';
@@ -10,13 +10,8 @@ import { Colors } from '../src/constants/theme';
 import { useAuthStore } from '../src/store/authStore';
 
 export default function RootLayout() {
-  const { playerName, initGuest } = useAuthStore();
-
-  useEffect(() => {
-    if (!playerName) {
-      initGuest();
-    }
-  }, []);
+  const { playerName } = useAuthStore();
+  const isNewUser = !playerName;
 
   return (
     <View style={styles.container}>
@@ -29,7 +24,15 @@ export default function RootLayout() {
           contentStyle: { backgroundColor: Colors.bgDarkest },
           animation: 'slide_from_right',
         }}
+        initialRouteName={isNewUser ? 'welcome' : '(tabs)'}
       >
+        <Stack.Screen
+          name="welcome"
+          options={{
+            headerShown: false,
+            animation: 'fade',
+          }}
+        />
         <Stack.Screen
           name="(tabs)"
           options={{ headerShown: false }}
@@ -38,6 +41,14 @@ export default function RootLayout() {
           name="create-room"
           options={{
             title: 'Create Table',
+            presentation: 'modal',
+            animation: 'slide_from_bottom',
+          }}
+        />
+        <Stack.Screen
+          name="solo-play"
+          options={{
+            title: 'Solo Play',
             presentation: 'modal',
             animation: 'slide_from_bottom',
           }}

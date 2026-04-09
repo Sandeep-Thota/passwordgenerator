@@ -2,18 +2,20 @@
 // PokerZone - Hand History Screen
 // ==========================================
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
+  TouchableOpacity,
 } from 'react-native';
 import { Colors, BorderRadius, Spacing, FontSize, Shadows } from '../../src/constants/theme';
 import { useGameStore } from '../../src/store/gameStore';
 import { formatChips, formatTimeAgo } from '../../src/utils/formatters';
 import { SUIT_SYMBOLS } from '../../src/constants/cards';
-import { Card } from '../../src/engine/types';
+import { Card, HandRecord } from '../../src/engine/types';
+import { HandReplay } from '../../src/components/game/HandReplay';
 
 function formatCard(card: Card): string {
   return `${card.rank}${SUIT_SYMBOLS[card.suit] || ''}`;
@@ -21,6 +23,12 @@ function formatCard(card: Card): string {
 
 export default function HistoryScreen() {
   const { handHistory } = useGameStore();
+  const [replayHand, setReplayHand] = useState<HandRecord | null>(null);
+
+  // Show replay viewer
+  if (replayHand) {
+    return <HandReplay hand={replayHand} onClose={() => setReplayHand(null)} />;
+  }
 
   if (handHistory.length === 0) {
     return (
@@ -30,7 +38,7 @@ export default function HistoryScreen() {
           <Text style={styles.emptyTitle}>No Hand History</Text>
           <Text style={styles.emptySubtitle}>
             Your played hands will appear here.{'\n'}
-            Join a table to start playing!
+            Join a table or start a solo game to begin!
           </Text>
         </View>
       </View>
@@ -44,9 +52,16 @@ export default function HistoryScreen() {
         keyExtractor={(item) => `hand-${item.handNumber}-${item.timestamp}`}
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => (
-          <View style={styles.handCard}>
+          <TouchableOpacity
+            style={styles.handCard}
+            onPress={() => setReplayHand(item)}
+            activeOpacity={0.7}
+          >
             <View style={styles.handHeader}>
               <Text style={styles.handNumber}>Hand #{item.handNumber}</Text>
+              <View style={styles.replayBadge}>
+                <Text style={styles.replayBadgeText}>▶ Replay</Text>
+              </View>
               <Text style={styles.handTime}>{formatTimeAgo(item.timestamp)}</Text>
             </View>
 
@@ -64,6 +79,9 @@ export default function HistoryScreen() {
                   {formatCard(card)}{' '}
                 </Text>
               ))}
+              {item.communityCards.length === 0 && (
+                <Text style={styles.noBoard}>No board (won pre-flop)</Text>
+              )}
             </View>
 
             {/* Winners */}
@@ -84,10 +102,10 @@ export default function HistoryScreen() {
             {/* Actions summary */}
             <View style={styles.actionsSummary}>
               <Text style={styles.actionsLabel}>
-                {item.players.length} players | {item.actions.length} actions
+                {item.players.length} players | {item.actions.length} actions | Tap to replay
               </Text>
             </View>
-          </View>
+          </TouchableOpacity>
         )}
       />
     </View>
@@ -137,12 +155,26 @@ const styles = StyleSheet.create({
   handHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     marginBottom: Spacing.md,
+    gap: Spacing.sm,
   },
   handNumber: {
     color: Colors.textPrimary,
     fontSize: FontSize.md,
+    fontWeight: '700',
+    flex: 1,
+  },
+  replayBadge: {
+    backgroundColor: Colors.bgLight,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  replayBadgeText: {
+    color: Colors.primary,
+    fontSize: FontSize.xs,
     fontWeight: '700',
   },
   handTime: {
@@ -159,6 +191,11 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: FontSize.sm,
     fontWeight: '600',
+  },
+  noBoard: {
+    color: Colors.textMuted,
+    fontSize: FontSize.sm,
+    fontStyle: 'italic',
   },
   cardText: {
     fontSize: FontSize.md,

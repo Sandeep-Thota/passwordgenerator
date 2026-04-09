@@ -2,8 +2,12 @@
 // PokerZone - Pot Display Component
 // ==========================================
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import Animated, {
+  useSharedValue, useAnimatedStyle,
+  withSpring, withSequence, FadeIn,
+} from 'react-native-reanimated';
 import { Pot } from '../../engine/types';
 import { Colors, Spacing, FontSize, BorderRadius, Shadows } from '../../constants/theme';
 import { formatChips } from '../../utils/formatters';
@@ -15,23 +19,38 @@ interface PotDisplayProps {
 
 export function PotDisplay({ pots, phase }: PotDisplayProps) {
   const totalPot = pots.reduce((sum, pot) => sum + pot.amount, 0);
+  const scale = useSharedValue(1);
+
+  // Bounce when pot changes
+  useEffect(() => {
+    if (totalPot > 0) {
+      scale.value = withSequence(
+        withSpring(1.15, { damping: 8, stiffness: 300 }),
+        withSpring(1, { damping: 12, stiffness: 200 })
+      );
+    }
+  }, [totalPot]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
   if (totalPot === 0 && phase === 'waiting') return null;
 
   return (
     <View style={styles.container}>
       {/* Main pot */}
-      <View style={styles.mainPot}>
+      <Animated.View entering={FadeIn.duration(300)} style={[styles.mainPot, animatedStyle]}>
         <View style={styles.chipIcon}>
           <View style={styles.chipInner} />
         </View>
         <Text style={styles.potLabel}>POT</Text>
         <Text style={styles.potAmount}>{formatChips(totalPot)}</Text>
-      </View>
+      </Animated.View>
 
       {/* Side pots */}
       {pots.length > 1 && (
-        <View style={styles.sidePots}>
+        <Animated.View entering={FadeIn.duration(200).delay(100)} style={styles.sidePots}>
           {pots.map((pot, index) => (
             <View key={index} style={styles.sidePot}>
               <Text style={styles.sidePotLabel}>
@@ -40,7 +59,7 @@ export function PotDisplay({ pots, phase }: PotDisplayProps) {
               <Text style={styles.sidePotAmount}>{formatChips(pot.amount)}</Text>
             </View>
           ))}
-        </View>
+        </Animated.View>
       )}
     </View>
   );

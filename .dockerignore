@@ -1,0 +1,13 @@
+node_modules
+.expo
+dist
+web-build
+.git
+*.md
+app
+src/components
+src/hooks
+src/store
+src/constants
+src/utils
+assets

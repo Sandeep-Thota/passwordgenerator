@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Colors, BorderRadius, Spacing, FontSize } from '../../src/constants/theme';
 import { useAuthStore } from '../../src/store/authStore';
+import { TABLE_THEMES } from '../../src/constants/tableThemes';
 
 export default function SettingsScreen() {
   const {
@@ -23,6 +24,7 @@ export default function SettingsScreen() {
     autoMuck, setAutoMuck,
     fourColorDeck, setFourColorDeck,
     theme, setTheme,
+    tableTheme, setTableTheme,
   } = useAuthStore();
 
   return (
@@ -87,6 +89,42 @@ export default function SettingsScreen() {
               <Text style={styles.themeIcon}>☀️</Text>
               <Text style={[styles.themeText, theme === 'light' && styles.themeTextActive]}>Light</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+
+      {/* Table Theme */}
+      <Text style={styles.sectionTitle}>Table Theme</Text>
+      <View style={styles.section}>
+        <View style={styles.tableThemeRow}>
+          <Text style={styles.themeLabel}>Felt & Card Style</Text>
+          <View style={styles.tableThemeSwatches}>
+            {TABLE_THEMES.map((t) => (
+              <TouchableOpacity
+                key={t.id}
+                style={[
+                  styles.tableThemeSwatch,
+                  tableTheme === t.id && styles.tableThemeSwatchActive,
+                ]}
+                onPress={() => setTableTheme(t.id)}
+              >
+                <View style={[styles.swatchCircle, { backgroundColor: t.feltColor }]}>
+                  {tableTheme === t.id && (
+                    <View style={styles.swatchCheck}>
+                      <Text style={styles.swatchCheckText}>✓</Text>
+                    </View>
+                  )}
+                </View>
+                <Text
+                  style={[
+                    styles.swatchLabel,
+                    tableTheme === t.id && styles.swatchLabelActive,
+                  ]}
+                >
+                  {t.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
       </View>
@@ -243,6 +281,51 @@ const styles = StyleSheet.create({
   },
   themeTextActive: {
     color: Colors.primary,
+  },
+  tableThemeRow: {
+    paddingVertical: Spacing.md,
+  },
+  tableThemeSwatches: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.md,
+  },
+  tableThemeSwatch: {
+    alignItems: 'center',
+    width: 64,
+  },
+  tableThemeSwatchActive: {},
+  swatchCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swatchCheck: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swatchCheckText: {
+    color: '#000',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  swatchLabel: {
+    color: Colors.textMuted,
+    fontSize: FontSize.xs,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  swatchLabelActive: {
+    color: Colors.primary,
+    fontWeight: '600',
   },
   aboutRow: {
     flexDirection: 'row',

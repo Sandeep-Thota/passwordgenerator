@@ -1,8 +1,9 @@
 // ==========================================
 // PokerZone - Game Room Screen
 // ==========================================
+// Supports both online (socket) and offline (bot) modes
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,8 +11,8 @@ import {
   SafeAreaView,
   TouchableOpacity,
   Alert,
-  Dimensions,
 } from 'react-native';
+import Animated, { BounceIn } from 'react-native-reanimated';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Colors, BorderRadius, Spacing, FontSize, Shadows } from '../../src/constants/theme';
 import { PokerTable } from '../../src/components/game/PokerTable';
@@ -20,53 +21,244 @@ import { ChatPanel } from '../../src/components/chat/ChatPanel';
 import { useGameStore } from '../../src/store/gameStore';
 import { useAuthStore } from '../../src/store/authStore';
 import { useSocket } from '../../src/hooks/useSocket';
-import { PlayerAction } from '../../src/engine/types';
+import { useSound } from '../../src/hooks/useSound';
+import { useHaptics } from '../../src/hooks/useHaptics';
+import { useKeyboardShortcuts } from '../../src/hooks/useKeyboardShortcuts';
+import {
+  PlayerAction, GamePhase, GameState, ChatMessage,
+  PlayerActionRequest, GameVariant,
+} from '../../src/engine/types';
 import { formatChips } from '../../src/utils/formatters';
 import { getHandStrength } from '../../src/engine/hand-evaluator';
 import { Modal } from '../../src/components/ui/Modal';
+import { OfflineGameManager } from '../../src/engine/offline-game';
+import { BotDifficulty } from '../../src/engine/bot';
 
 export default function GameScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{
+    id: string;
+    mode?: string;
+    variant?: string;
+    difficulty?: string;
+    numBots?: string;
+    smallBlind?: string;
+    bigBlind?: string;
+  }>();
+
+  const isOffline = params.mode === 'offline' || params.id === 'solo';
+
+  // ==========================================
+  // Shared UI state
+  // ==========================================
   const [showMenu, setShowMenu] = useState(false);
   const [showAddChips, setShowAddChips] = useState(false);
 
-  const {
-    gameState, playerId, chatMessages,
-    validActions, minBet, maxBet,
-    isChatExpanded, toggleChat, lastWinners,
-  } = useGameStore();
+  // Offline-specific local state
+  const [offlineGameState, setOfflineGameState] = useState<GameState | null>(null);
+  const [offlinePlayerId, setOfflinePlayerId] = useState('');
+  const [offlineValidActions, setOfflineValidActions] = useState<PlayerAction[]>([]);
+  const [offlineMinBet, setOfflineMinBet] = useState(0);
+  const [offlineMaxBet, setOfflineMaxBet] = useState(0);
+  const [offlineWinners, setOfflineWinners] = useState<{ playerId: string; amount: number; hand?: any }[]>([]);
+  const [offlineChatMessages, setOfflineChatMessages] = useState<ChatMessage[]>([]);
+  const offlineManagerRef = useRef<OfflineGameManager | null>(null);
 
+  // Online state from stores
+  const storeState = useGameStore();
   const { playerName, avatar, showHandStrength } = useAuthStore();
-  const { sendAction, sitDown, sendChat, sendEmoji, leaveRoom, showCards, addChips } = useSocket();
+  const { sendAction, sitDown, sendChat, sendEmoji, leaveRoom, showCards, addChips: addChipsOnline } = useSocket();
+  const { playSound } = useSound();
+  const { trigger: triggerHaptic } = useHaptics();
+
+  // Resolve state based on mode
+  const gameState = isOffline ? offlineGameState : storeState.gameState;
+  const playerId = isOffline ? offlinePlayerId : storeState.playerId;
+  const validActions = isOffline ? offlineValidActions : storeState.validActions;
+  const minBet = isOffline ? offlineMinBet : storeState.minBet;
+  const maxBet = isOffline ? offlineMaxBet : storeState.maxBet;
+  const lastWinners = isOffline ? offlineWinners : storeState.lastWinners;
+  const chatMessages = isOffline ? offlineChatMessages : storeState.chatMessages;
 
   const player = gameState?.players.find(p => p.id === playerId);
   const isMyTurn = validActions.length > 0;
-  const isSeated = !!player;
+  const prevPhaseRef = useRef<GamePhase | null>(null);
 
-  // Calculate hand strength if enabled
-  const handStrengthValue = showHandStrength && player && player.cards.length > 0 && gameState
-    ? getHandStrength(player.cards, gameState.communityCards, gameState.variant)
-    : null;
+  // ==========================================
+  // Offline mode setup
+  // ==========================================
+  useEffect(() => {
+    if (!isOffline) return;
 
-  const handleAction = (action: PlayerAction, amount?: number) => {
-    sendAction(action, amount);
-  };
+    const manager = new OfflineGameManager(
+      {
+        playerName: playerName || 'Player',
+        playerAvatar: avatar || 'ace',
+        numberOfBots: parseInt(params.numBots || '5'),
+        botDifficulty: (params.difficulty as BotDifficulty) || 'medium',
+        startingChips: 1000,
+        smallBlind: parseInt(params.smallBlind || '1'),
+        bigBlind: parseInt(params.bigBlind || '2'),
+        variant: (params.variant as GameVariant) || 'texas-holdem',
+        autoStartNextHand: true,
+        nextHandDelay: 3500,
+      },
+      {
+        onStateChange: (state) => {
+          setOfflineGameState(state);
+        },
+        onPlayerTurnStart: (actions, min, max) => {
+          setOfflineValidActions(actions);
+          setOfflineMinBet(min);
+          setOfflineMaxBet(max);
+        },
+        onBotAction: (botId, botName, action) => {
+          // Add bot action as a chat message for visibility
+          const actionText = action.amount
+            ? `${action.action} ${formatChips(action.amount)}`
+            : action.action;
+          setOfflineChatMessages(prev => [...prev.slice(-99), {
+            id: Math.random().toString(36).substring(2),
+            playerId: botId,
+            playerName: botName,
+            message: actionText,
+            timestamp: Date.now(),
+            type: 'system' as const,
+          }]);
+        },
+        onHandComplete: (record) => {
+          // Set winners for display
+          setOfflineWinners(record.winners.map(w => ({
+            playerId: w.playerId,
+            amount: w.amount,
+            hand: w.hand,
+          })));
+          // Clear valid actions
+          setOfflineValidActions([]);
 
-  const handleSitDown = (seatIndex: number) => {
-    sitDown(seatIndex);
-  };
+          // Add to persisted hand history
+          useGameStore.getState().addHandRecord(record);
+        },
+        onGameStart: (state) => {
+          const systemMsg: ChatMessage = {
+            id: 'start',
+            playerId: 'system',
+            playerName: 'System',
+            message: 'Game started! Good luck!',
+            timestamp: Date.now(),
+            type: 'system',
+          };
+          setOfflineChatMessages([systemMsg]);
+        },
+        onError: (message) => {
+          Alert.alert('Game', message);
+        },
+      }
+    );
+
+    offlineManagerRef.current = manager;
+    setOfflinePlayerId(manager.getHumanPlayerId());
+
+    // Start the game after a short delay for the UI to render
+    const startTimer = setTimeout(() => {
+      manager.startGame();
+    }, 500);
+
+    return () => {
+      clearTimeout(startTimer);
+      manager.destroy();
+      offlineManagerRef.current = null;
+    };
+  }, [isOffline]);
+
+  // ==========================================
+  // Sound effects triggered by game phase changes
+  // ==========================================
+  useEffect(() => {
+    if (!gameState) return;
+    const prevPhase = prevPhaseRef.current;
+    const phase = gameState.phase;
+    prevPhaseRef.current = phase;
+
+    if (prevPhase === phase) return;
+
+    if (phase === 'pre-flop' && prevPhase !== 'pre-flop') {
+      playSound('card-deal');
+    } else if (phase === 'flop' || phase === 'turn' || phase === 'river') {
+      playSound('card-flip');
+    } else if (phase === 'showdown' || phase === 'finished') {
+      if (lastWinners.some(w => w.playerId === playerId)) {
+        playSound('chip-win');
+        triggerHaptic('success');
+      }
+    }
+
+    // Clear winners when a new hand starts
+    if (phase === 'pre-flop' && prevPhase === 'finished') {
+      if (isOffline) setOfflineWinners([]);
+    }
+  }, [gameState?.phase]);
+
+  // Sound when it becomes your turn
+  useEffect(() => {
+    if (isMyTurn) {
+      playSound('your-turn');
+      triggerHaptic('medium');
+    }
+  }, [isMyTurn]);
+
+  // ==========================================
+  // Action handlers
+  // ==========================================
+  const handleAction = useCallback((action: PlayerAction, amount?: number) => {
+    switch (action) {
+      case 'fold': playSound('fold'); triggerHaptic('light'); break;
+      case 'check': playSound('check'); triggerHaptic('light'); break;
+      case 'call': playSound('chip-bet'); triggerHaptic('medium'); break;
+      case 'bet':
+      case 'raise': playSound('chip-bet'); triggerHaptic('medium'); break;
+      case 'all-in': playSound('all-in'); triggerHaptic('heavy'); break;
+    }
+
+    if (isOffline) {
+      const request: PlayerActionRequest = { action, amount };
+      offlineManagerRef.current?.processPlayerAction(request);
+      setOfflineValidActions([]);
+    } else {
+      sendAction(action, amount);
+    }
+  }, [isOffline]);
+
+  useKeyboardShortcuts({
+    validActions,
+    onAction: handleAction,
+    minBet,
+    maxBet,
+    enabled: isMyTurn,
+  });
+
+  const handleSitDown = useCallback((seatIndex: number) => {
+    if (!isOffline) {
+      playSound('join');
+      triggerHaptic('light');
+      sitDown(seatIndex);
+    }
+  }, [isOffline]);
 
   const handleLeave = () => {
     Alert.alert(
       'Leave Table',
-      'Are you sure you want to leave this table?',
+      'Are you sure you want to leave?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Leave',
           style: 'destructive',
           onPress: () => {
-            leaveRoom();
+            if (isOffline) {
+              offlineManagerRef.current?.destroy();
+            } else {
+              leaveRoom();
+            }
             router.back();
           },
         },
@@ -74,17 +266,79 @@ export default function GameScreen() {
     );
   };
 
+  const handleAddChips = useCallback((amount: number) => {
+    if (isOffline) {
+      offlineManagerRef.current?.addChips(amount);
+    } else {
+      addChipsOnline(amount);
+    }
+    setShowAddChips(false);
+  }, [isOffline]);
+
+  const handleSendChat = useCallback((message: string) => {
+    if (isOffline) {
+      setOfflineChatMessages(prev => [...prev.slice(-99), {
+        id: Math.random().toString(36).substring(2),
+        playerId,
+        playerName: playerName || 'You',
+        message,
+        timestamp: Date.now(),
+        type: 'chat' as const,
+      }]);
+    } else {
+      sendChat(message);
+    }
+  }, [isOffline, playerId, playerName]);
+
+  const handleSendEmoji = useCallback((emoji: string) => {
+    if (isOffline) {
+      setOfflineChatMessages(prev => [...prev.slice(-99), {
+        id: Math.random().toString(36).substring(2),
+        playerId,
+        playerName: playerName || 'You',
+        message: emoji,
+        timestamp: Date.now(),
+        type: 'emoji-reaction' as const,
+      }]);
+    } else {
+      sendEmoji(emoji);
+    }
+  }, [isOffline, playerId, playerName]);
+
+  // ==========================================
+  // Derived state
+  // ==========================================
+  const handStrengthValue = showHandStrength && player && player.cards.length > 0 && gameState
+    ? getHandStrength(player.cards, gameState.communityCards, gameState.variant)
+    : null;
+
+  const isChatExpanded = isOffline ? false : storeState.isChatExpanded;
+  const toggleChat = isOffline
+    ? () => {}
+    : storeState.toggleChat;
+
+  const modeLabel = isOffline ? 'Solo Practice' : `Room: ${params.id}`;
+
+  // ==========================================
+  // Loading state
+  // ==========================================
   if (!gameState) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loading}>
-          <Text style={styles.loadingText}>Connecting to table...</Text>
-          <Text style={styles.loadingCode}>Room: {id}</Text>
+          <Text style={styles.loadingEmoji}>🃏</Text>
+          <Text style={styles.loadingText}>
+            {isOffline ? 'Setting up table...' : 'Connecting to table...'}
+          </Text>
+          <Text style={styles.loadingCode}>{modeLabel}</Text>
         </View>
       </SafeAreaView>
     );
   }
 
+  // ==========================================
+  // Render
+  // ==========================================
   return (
     <SafeAreaView style={styles.container}>
       {/* Top bar */}
@@ -94,9 +348,10 @@ export default function GameScreen() {
         </TouchableOpacity>
 
         <View style={styles.roomInfo}>
-          <Text style={styles.roomCode}>Room: {id}</Text>
+          <Text style={styles.roomCode}>{modeLabel}</Text>
           <Text style={styles.playerCount}>
             {gameState.players.length} players
+            {isOffline ? ` | Hand #${gameState.handNumber}` : ''}
           </Text>
         </View>
 
@@ -145,7 +400,7 @@ export default function GameScreen() {
             <Text style={styles.heroChipsLabel}>Your Stack</Text>
             <Text style={styles.heroChipsValue}>{formatChips(player.chips)}</Text>
           </View>
-          {gameState.phase === 'finished' && (
+          {gameState.phase === 'finished' && !isOffline && (
             <TouchableOpacity
               style={styles.showCardsButton}
               onPress={showCards}
@@ -164,7 +419,7 @@ export default function GameScreen() {
 
       {/* Winner announcement */}
       {lastWinners.length > 0 && gameState.phase === 'finished' && (
-        <View style={styles.winnerAnnouncement}>
+        <Animated.View entering={BounceIn.duration(500)} style={styles.winnerAnnouncement}>
           {lastWinners.map((winner, idx) => {
             const winnerPlayer = gameState.players.find(p => p.id === winner.playerId);
             return (
@@ -174,7 +429,7 @@ export default function GameScreen() {
               </Text>
             );
           })}
-        </View>
+        </Animated.View>
       )}
 
       {/* Action panel (when it's player's turn) */}
@@ -192,8 +447,8 @@ export default function GameScreen() {
       {/* Chat */}
       <ChatPanel
         messages={chatMessages}
-        onSend={sendChat}
-        onEmojiReaction={sendEmoji}
+        onSend={handleSendChat}
+        onEmojiReaction={handleSendEmoji}
         isExpanded={isChatExpanded}
         onToggle={toggleChat}
       />
@@ -201,20 +456,15 @@ export default function GameScreen() {
       {/* Menu Modal */}
       <Modal visible={showMenu} onClose={() => setShowMenu(false)} title="Table Options">
         <View style={styles.menuOptions}>
-          <TouchableOpacity style={styles.menuOption} onPress={() => {
-            setShowMenu(false);
-            // Copy room code
-          }}>
-            <Text style={styles.menuOptionText}>Copy Room Code</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.menuOption} onPress={() => {
-            setShowMenu(false);
-          }}>
+          {!isOffline && (
+            <TouchableOpacity style={styles.menuOption} onPress={() => setShowMenu(false)}>
+              <Text style={styles.menuOptionText}>Copy Room Code</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.menuOption} onPress={() => setShowMenu(false)}>
             <Text style={styles.menuOptionText}>Hand History</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.menuOption} onPress={() => {
-            setShowMenu(false);
-          }}>
+          <TouchableOpacity style={styles.menuOption} onPress={() => setShowMenu(false)}>
             <Text style={styles.menuOptionText}>Table Stats</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.menuOption, styles.menuOptionDanger]} onPress={() => {
@@ -233,10 +483,7 @@ export default function GameScreen() {
             <TouchableOpacity
               key={amount}
               style={styles.addChipOption}
-              onPress={() => {
-                addChips(amount);
-                setShowAddChips(false);
-              }}
+              onPress={() => handleAddChips(amount)}
             >
               <Text style={styles.addChipText}>+{formatChips(amount)}</Text>
             </TouchableOpacity>
@@ -256,6 +503,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  loadingEmoji: {
+    fontSize: 48,
+    marginBottom: Spacing.md,
   },
   loadingText: {
     color: Colors.textSecondary,
@@ -293,7 +544,6 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: FontSize.sm,
     fontWeight: '700',
-    fontFamily: 'monospace',
   },
   playerCount: {
     color: Colors.textMuted,

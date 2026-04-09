@@ -667,7 +667,10 @@ export class PokerGame {
       communityCards: [...this.state.communityCards],
       pots: [...this.state.pots],
       actions: [...this.actionLog],
-      winners: this.state.winners || [],
+      winners: (this.state.winners || []).map(w => ({
+        ...w,
+        playerName: this.state.players.find(p => p.id === w.playerId)?.name || 'Unknown',
+      })),
     };
     this.handHistory.push(record);
   }

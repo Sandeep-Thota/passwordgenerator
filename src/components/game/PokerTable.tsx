@@ -8,6 +8,8 @@ import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { GameState } from '../../engine/types';
 import { Colors, BorderRadius, Spacing, FontSize, Shadows } from '../../constants/theme';
 import { SEAT_POSITIONS } from '../../constants/cards';
+import { getTableTheme } from '../../constants/tableThemes';
+import { useAuthStore } from '../../store/authStore';
 import { PlayerSeat } from './PlayerSeat';
 import { CommunityCards } from './CommunityCards';
 import { PotDisplay } from './PotDisplay';
@@ -20,6 +22,7 @@ interface PokerTableProps {
 }
 
 export function PokerTable({ gameState, heroPlayerId, onSitDown }: PokerTableProps) {
+  const tableTheme = getTableTheme(useAuthStore(state => state.tableTheme));
   const screenWidth = Dimensions.get('window').width;
   const tableWidth = Math.min(screenWidth - 24, 500);
   const tableHeight = tableWidth * 0.7;
@@ -39,7 +42,7 @@ export function PokerTable({ gameState, heroPlayerId, onSitDown }: PokerTablePro
         {/* Outer border - wood trim */}
         <View style={[styles.tableOuter, { width: tableWidth, height: tableHeight }]}>
           {/* Felt surface */}
-          <View style={styles.felt}>
+          <View style={[styles.felt, { backgroundColor: tableTheme.feltColor, borderColor: tableTheme.feltBorder }]}>
             {/* Table logo */}
             <View style={styles.logoContainer}>
               <Text style={styles.logoText}>POKERZONE</Text>
