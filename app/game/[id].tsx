@@ -24,6 +24,7 @@ import { useSocket } from '../../src/hooks/useSocket';
 import { useSound } from '../../src/hooks/useSound';
 import { useHaptics } from '../../src/hooks/useHaptics';
 import { useKeyboardShortcuts } from '../../src/hooks/useKeyboardShortcuts';
+import { useNotifications } from '../../src/hooks/useNotifications';
 import {
   PlayerAction, GamePhase, GameState, ChatMessage,
   PlayerActionRequest, GameVariant,
@@ -33,6 +34,7 @@ import { getHandStrength } from '../../src/engine/hand-evaluator';
 import { Modal } from '../../src/components/ui/Modal';
 import { OfflineGameManager } from '../../src/engine/offline-game';
 import { BotDifficulty } from '../../src/engine/bot';
+import { Ledger, buildLedgerEntries } from '../../src/components/game/Ledger';
 
 export default function GameScreen() {
   const params = useLocalSearchParams<{
@@ -52,6 +54,8 @@ export default function GameScreen() {
   // ==========================================
   const [showMenu, setShowMenu] = useState(false);
   const [showAddChips, setShowAddChips] = useState(false);
+  const [showLedger, setShowLedger] = useState(false);
+  const buyInTracker = useRef(new Map<string, { count: number; total: number }>());
 
   // Offline-specific local state
   const [offlineGameState, setOfflineGameState] = useState<GameState | null>(null);
@@ -69,6 +73,7 @@ export default function GameScreen() {
   const { sendAction, sitDown, sendChat, sendEmoji, leaveRoom, showCards, addChips: addChipsOnline } = useSocket();
   const { playSound } = useSound();
   const { trigger: triggerHaptic } = useHaptics();
+  const { notifyYourTurn, notifyWin } = useNotifications();
 
   // Resolve state based on mode
   const gameState = isOffline ? offlineGameState : storeState.gameState;
@@ -139,6 +144,11 @@ export default function GameScreen() {
           useGameStore.getState().addHandRecord(record);
         },
         onGameStart: (state) => {
+          // Track initial buy-ins for all players
+          for (const p of state.players) {
+            buyInTracker.current.set(p.id, { count: 1, total: p.chips });
+          }
+
           const systemMsg: ChatMessage = {
             id: 'start',
             playerId: 'system',
@@ -198,13 +208,24 @@ export default function GameScreen() {
     }
   }, [gameState?.phase]);
 
-  // Sound when it becomes your turn
+  // Sound + notification when it becomes your turn
   useEffect(() => {
     if (isMyTurn) {
       playSound('your-turn');
       triggerHaptic('medium');
+      notifyYourTurn();
     }
   }, [isMyTurn]);
+
+  // Notification when you win
+  useEffect(() => {
+    if (lastWinners.length > 0) {
+      const myWin = lastWinners.find(w => w.playerId === playerId);
+      if (myWin) {
+        notifyWin(formatChips(myWin.amount));
+      }
+    }
+  }, [lastWinners]);
 
   // ==========================================
   // Action handlers
@@ -267,13 +288,17 @@ export default function GameScreen() {
   };
 
   const handleAddChips = useCallback((amount: number) => {
+    // Track buy-in before adding chips
+    const existing = buyInTracker.current.get(playerId) || { count: 0, total: 0 };
+    buyInTracker.current.set(playerId, { count: existing.count + 1, total: existing.total + amount });
+
     if (isOffline) {
       offlineManagerRef.current?.addChips(amount);
     } else {
       addChipsOnline(amount);
     }
     setShowAddChips(false);
-  }, [isOffline]);
+  }, [isOffline, playerId]);
 
   const handleSendChat = useCallback((message: string) => {
     if (isOffline) {
@@ -464,7 +489,10 @@ export default function GameScreen() {
           <TouchableOpacity style={styles.menuOption} onPress={() => setShowMenu(false)}>
             <Text style={styles.menuOptionText}>Hand History</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.menuOption} onPress={() => setShowMenu(false)}>
+          <TouchableOpacity style={styles.menuOption} onPress={() => {
+            setShowMenu(false);
+            setShowLedger(true);
+          }}>
             <Text style={styles.menuOptionText}>Table Stats</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.menuOption, styles.menuOptionDanger]} onPress={() => {
@@ -490,6 +518,18 @@ export default function GameScreen() {
           ))}
         </View>
       </Modal>
+      {showLedger && gameState && (
+        <View style={StyleSheet.absoluteFill}>
+          <Ledger
+            entries={buildLedgerEntries(
+              gameState.players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar, chips: p.chips })),
+              storeState.handHistory,
+              buyInTracker.current,
+            )}
+            onClose={() => setShowLedger(false)}
+          />
+        </View>
+      )}
     </SafeAreaView>
   );
 }

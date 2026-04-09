@@ -11,6 +11,7 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
   const icons: Record<string, string> = {
     'Lobby': '♠',
     'Profile': '👤',
+    'Ranks': '🏆',
     'History': '📋',
     'Settings': '⚙',
   };
@@ -71,6 +72,13 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ focused }) => <TabIcon name="Profile" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="leaderboard"
+        options={{
+          title: 'Ranks',
+          tabBarIcon: ({ focused }) => <TabIcon name="Ranks" focused={focused} />,
         }}
       />
       <Tabs.Screen
