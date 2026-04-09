@@ -240,9 +240,9 @@ function getMediumBotAction(
 
   const rand = Math.random();
 
-  // Strong hand: bet/raise aggressively
+  // Strong hand: bet/raise, but sometimes just call to avoid infinite raise wars
   if (isStrong) {
-    if (validActions.includes('raise')) {
+    if (validActions.includes('raise') && rand < 0.55) {
       // Bet between 50%-80% of pot
       const betSize = Math.max(
         minBet,

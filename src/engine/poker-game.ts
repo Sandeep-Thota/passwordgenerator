@@ -16,6 +16,8 @@ export class PokerGame {
   private config: RoomConfig;
   private handHistory: HandRecord[] = [];
   private actionLog: HandRecord['actions'] = [];
+  private raisesThisRound: number = 0;
+  private static MAX_RAISES_PER_ROUND = 4;
 
   constructor(config: RoomConfig) {
     this.config = config;
@@ -151,6 +153,7 @@ export class PokerGame {
     this.state.winners = undefined;
     this.state.lastAction = undefined;
     this.actionLog = [];
+    this.raisesThisRound = 0;
 
     // Reset deck
     this.deck.reset(this.config.variant);
@@ -331,10 +334,12 @@ export class PokerGame {
       actions.push('call');
     }
 
+    const canRaise = this.raisesThisRound < PokerGame.MAX_RAISES_PER_ROUND;
+
     if (this.state.bettingStructure === 'no-limit') {
       const minRaise = Math.max(this.state.bigBlindAmount, highestBet * 2 - player.currentBet);
       if (player.chips > toCall) {
-        actions.push('raise');
+        if (canRaise) actions.push('raise');
         actions.push('all-in');
         return {
           actions,
@@ -348,7 +353,7 @@ export class PokerGame {
     } else if (this.state.bettingStructure === 'pot-limit') {
       const potSize = this.getTotalPotSize();
       const maxRaise = Math.min(potSize + toCall * 2, player.chips);
-      if (player.chips > toCall) {
+      if (player.chips > toCall && canRaise) {
         actions.push('raise');
         return {
           actions,
@@ -406,6 +411,7 @@ export class PokerGame {
         this.state.pots[0].amount += additional;
         player.lastAction = action.action;
         this.state.minBet = totalBet;
+        this.raisesThisRound++;
         if (player.chips === 0) player.isAllIn = true;
         // Reset hasActed for other active players when there's a raise
         for (const p of this.state.players) {
@@ -536,6 +542,7 @@ export class PokerGame {
 
   private advancePhase(): void {
     // Reset for next betting round
+    this.raisesThisRound = 0;
     for (const player of this.state.players) {
       player.currentBet = 0;
       player.hasActed = false;
