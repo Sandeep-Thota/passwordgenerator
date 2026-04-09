@@ -45,6 +45,10 @@ interface AuthStore {
   theme: 'dark' | 'light';
   setTheme: (theme: 'dark' | 'light') => void;
 
+  // Table Theme
+  tableTheme: string;
+  setTableTheme: (theme: string) => void;
+
   // Initialize with random guest profile
   initGuest: () => void;
 }
@@ -83,6 +87,9 @@ export const useAuthStore = create<AuthStore>()(
 
       theme: 'dark',
       setTheme: (theme) => set({ theme }),
+
+      tableTheme: 'classic-green',
+      setTableTheme: (theme) => set({ tableTheme: theme }),
 
       initGuest: () => set({
         playerName: generateGuestName(),

@@ -9,6 +9,8 @@ import Animated, { FadeIn, FlipInYRight } from 'react-native-reanimated';
 import { Card as CardType } from '../../engine/types';
 import { Colors, BorderRadius, Shadows } from '../../constants/theme';
 import { SUIT_SYMBOLS, SUIT_COLORS, RANK_DISPLAY } from '../../constants/cards';
+import { getTableTheme } from '../../constants/tableThemes';
+import { useAuthStore } from '../../store/authStore';
 
 interface CardProps {
   card: CardType;
@@ -36,6 +38,7 @@ export function PlayingCard({
   delay = 0,
   style,
 }: CardProps) {
+  const tableTheme = getTableTheme(useAuthStore(state => state.tableTheme));
   const dims = CARD_SIZES[size];
   const isHidden = faceDown || card.code === '??';
 
@@ -48,14 +51,14 @@ export function PlayingCard({
           {
             width: dims.width,
             height: dims.height,
-            backgroundColor: Colors.cardBack,
+            backgroundColor: tableTheme.cardBack,
           },
           style,
         ]}
       >
-        <View style={styles.cardBackInner}>
-          <View style={styles.cardBackPattern}>
-            <Text style={[styles.cardBackLogo, { fontSize: dims.suitSize + 4 }]}>PZ</Text>
+        <View style={[styles.cardBackInner, { borderColor: tableTheme.cardBackAccent }]}>
+          <View style={[styles.cardBackPattern, { backgroundColor: tableTheme.cardBack }]}>
+            <Text style={[styles.cardBackLogo, { fontSize: dims.suitSize + 4, color: tableTheme.cardBackLogo }]}>PZ</Text>
           </View>
         </View>
       </Animated.View>

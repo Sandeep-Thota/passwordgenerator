@@ -142,6 +142,19 @@ export interface HandRecord {
   winners: { playerId: string; playerName: string; amount: number; hand?: HandResult }[];
 }
 
+export interface LedgerEntry {
+  playerId: string;
+  playerName: string;
+  avatar: string;
+  buyIns: number;        // total number of buy-ins
+  totalBuyIn: number;    // total chips bought in
+  cashOut: number;       // chips at end (current stack)
+  netProfit: number;     // cashOut - totalBuyIn
+  handsPlayed: number;
+  handsWon: number;
+  biggestPot: number;
+}
+
 export interface TournamentConfig {
   name: string;
   variant: GameVariant;

@@ -7,6 +7,7 @@
 
 import {
   GameState,
+  GameVariant,
   Player,
   PlayerAction,
   PlayerActionRequest,
@@ -50,6 +51,8 @@ export interface OfflineGameConfig {
   smallBlind: number;
   /** Big blind amount */
   bigBlind: number;
+  /** Game variant (defaults to texas-holdem) */
+  variant?: GameVariant;
   /** Ante amount (optional, defaults to 0) */
   ante?: number;
   /** Delay range for bot actions in ms: [min, max] */
@@ -93,7 +96,7 @@ export class OfflineGameManager {
     const maxPlayers = Math.min(config.numberOfBots + 1, 9);
     this.roomConfig = {
       name: 'Offline Game',
-      variant: 'texas-holdem',
+      variant: config.variant ?? 'texas-holdem',
       bettingStructure: 'no-limit',
       smallBlind: config.smallBlind,
       bigBlind: config.bigBlind,
