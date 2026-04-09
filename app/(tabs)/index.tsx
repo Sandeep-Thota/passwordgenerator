@@ -115,6 +115,20 @@ export default function LobbyScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Solo Play button */}
+        <TouchableOpacity
+          style={styles.soloPlayButton}
+          onPress={() => router.push('/solo-play')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.soloPlayIcon}>🤖</Text>
+          <View style={styles.soloPlayInfo}>
+            <Text style={styles.soloPlayTitle}>Solo Practice</Text>
+            <Text style={styles.soloPlaySubtitle}>Play against AI bots - no server needed</Text>
+          </View>
+          <Text style={styles.soloPlayArrow}>›</Text>
+        </TouchableOpacity>
+
         {/* Join by code input */}
         {showJoinInput && (
           <View style={styles.joinCodeSection}>
@@ -324,6 +338,39 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: FontSize.xs,
     marginTop: 2,
+  },
+  soloPlayButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.bgMedium,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.xxl,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    gap: Spacing.md,
+    ...Shadows.sm,
+  },
+  soloPlayIcon: {
+    fontSize: 28,
+  },
+  soloPlayInfo: {
+    flex: 1,
+  },
+  soloPlayTitle: {
+    color: Colors.textPrimary,
+    fontSize: FontSize.lg,
+    fontWeight: '800',
+  },
+  soloPlaySubtitle: {
+    color: Colors.textMuted,
+    fontSize: FontSize.xs,
+    marginTop: 2,
+  },
+  soloPlayArrow: {
+    color: Colors.textMuted,
+    fontSize: FontSize.xxl,
+    fontWeight: '300',
   },
   joinCodeSection: {
     flexDirection: 'row',

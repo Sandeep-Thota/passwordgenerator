@@ -2,7 +2,7 @@
 // PokerZone - Game Room Screen
 // ==========================================
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   Alert,
   Dimensions,
 } from 'react-native';
+import Animated, { FadeIn, BounceIn } from 'react-native-reanimated';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Colors, BorderRadius, Spacing, FontSize, Shadows } from '../../src/constants/theme';
 import { PokerTable } from '../../src/components/game/PokerTable';
@@ -20,7 +21,9 @@ import { ChatPanel } from '../../src/components/chat/ChatPanel';
 import { useGameStore } from '../../src/store/gameStore';
 import { useAuthStore } from '../../src/store/authStore';
 import { useSocket } from '../../src/hooks/useSocket';
-import { PlayerAction } from '../../src/engine/types';
+import { useSound } from '../../src/hooks/useSound';
+import { useHaptics } from '../../src/hooks/useHaptics';
+import { PlayerAction, GamePhase } from '../../src/engine/types';
 import { formatChips } from '../../src/utils/formatters';
 import { getHandStrength } from '../../src/engine/hand-evaluator';
 import { Modal } from '../../src/components/ui/Modal';
@@ -38,10 +41,42 @@ export default function GameScreen() {
 
   const { playerName, avatar, showHandStrength } = useAuthStore();
   const { sendAction, sitDown, sendChat, sendEmoji, leaveRoom, showCards, addChips } = useSocket();
+  const { playSound } = useSound();
+  const { trigger: triggerHaptic } = useHaptics();
 
   const player = gameState?.players.find(p => p.id === playerId);
   const isMyTurn = validActions.length > 0;
   const isSeated = !!player;
+  const prevPhaseRef = useRef<GamePhase | null>(null);
+
+  // Sound effects triggered by game phase changes
+  useEffect(() => {
+    if (!gameState) return;
+    const prevPhase = prevPhaseRef.current;
+    const phase = gameState.phase;
+    prevPhaseRef.current = phase;
+
+    if (prevPhase === phase) return;
+
+    if (phase === 'pre-flop' && prevPhase !== 'pre-flop') {
+      playSound('card-deal');
+    } else if (phase === 'flop' || phase === 'turn' || phase === 'river') {
+      playSound('card-flip');
+    } else if (phase === 'showdown' || phase === 'finished') {
+      if (lastWinners.some(w => w.playerId === playerId)) {
+        playSound('chip-win');
+        triggerHaptic('success');
+      }
+    }
+  }, [gameState?.phase]);
+
+  // Sound when it becomes your turn
+  useEffect(() => {
+    if (isMyTurn) {
+      playSound('your-turn');
+      triggerHaptic('medium');
+    }
+  }, [isMyTurn]);
 
   // Calculate hand strength if enabled
   const handStrengthValue = showHandStrength && player && player.cards.length > 0 && gameState
@@ -49,10 +84,21 @@ export default function GameScreen() {
     : null;
 
   const handleAction = (action: PlayerAction, amount?: number) => {
+    // Play appropriate sound for the action
+    switch (action) {
+      case 'fold': playSound('fold'); triggerHaptic('light'); break;
+      case 'check': playSound('check'); triggerHaptic('light'); break;
+      case 'call': playSound('chip-bet'); triggerHaptic('medium'); break;
+      case 'bet':
+      case 'raise': playSound('chip-bet'); triggerHaptic('medium'); break;
+      case 'all-in': playSound('all-in'); triggerHaptic('heavy'); break;
+    }
     sendAction(action, amount);
   };
 
   const handleSitDown = (seatIndex: number) => {
+    playSound('join');
+    triggerHaptic('light');
     sitDown(seatIndex);
   };
 
@@ -164,7 +210,7 @@ export default function GameScreen() {
 
       {/* Winner announcement */}
       {lastWinners.length > 0 && gameState.phase === 'finished' && (
-        <View style={styles.winnerAnnouncement}>
+        <Animated.View entering={BounceIn.duration(500)} style={styles.winnerAnnouncement}>
           {lastWinners.map((winner, idx) => {
             const winnerPlayer = gameState.players.find(p => p.id === winner.playerId);
             return (
@@ -174,7 +220,7 @@ export default function GameScreen() {
               </Text>
             );
           })}
-        </View>
+        </Animated.View>
       )}
 
       {/* Action panel (when it's player's turn) */}

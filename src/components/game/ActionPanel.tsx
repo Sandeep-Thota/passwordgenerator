@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import Animated, { SlideInDown, FadeIn } from 'react-native-reanimated';
 import { PlayerAction, GameState } from '../../engine/types';
 import { Colors, BorderRadius, Spacing, FontSize, Shadows } from '../../constants/theme';
 import { formatChips } from '../../utils/formatters';
@@ -50,7 +51,7 @@ export function ActionPanel({
 
   if (showRaiseSlider) {
     return (
-      <View style={styles.container}>
+      <Animated.View entering={SlideInDown.duration(250).springify().damping(18)} style={styles.container}>
         <View style={styles.raisePanel}>
           <Text style={styles.raiseTitle}>Raise to</Text>
 
@@ -118,12 +119,12 @@ export function ActionPanel({
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </Animated.View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <Animated.View entering={SlideInDown.duration(300).springify().damping(16)} style={styles.container}>
       <View style={styles.actionBar}>
         {/* Fold button */}
         {canFold && (
@@ -185,7 +186,7 @@ export function ActionPanel({
           </TouchableOpacity>
         )}
       </View>
-    </View>
+    </Animated.View>
   );
 }
 

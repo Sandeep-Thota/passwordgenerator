@@ -2,8 +2,13 @@
 // PokerZone - Player Seat Component
 // ==========================================
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import Animated, {
+  useSharedValue, useAnimatedStyle,
+  withRepeat, withSequence, withTiming, withSpring,
+  Easing, FadeIn, ZoomIn, BounceIn, FadeInUp,
+} from 'react-native-reanimated';
 import { Player } from '../../engine/types';
 import { Colors, BorderRadius, Spacing, FontSize, Shadows } from '../../constants/theme';
 import { Avatar } from '../ui/Avatar';
@@ -34,6 +39,43 @@ export function PlayerSeat({
   const left = position.x * tableWidth - 45;
   const top = position.y * tableHeight - 35;
 
+  // Pulsing glow for active player
+  const glowOpacity = useSharedValue(1);
+
+  useEffect(() => {
+    if (isCurrentPlayer) {
+      glowOpacity.value = withRepeat(
+        withSequence(
+          withTiming(0.4, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: 700, easing: Easing.inOut(Easing.ease) })
+        ),
+        -1,
+        true
+      );
+    } else {
+      glowOpacity.value = withTiming(1, { duration: 200 });
+    }
+  }, [isCurrentPlayer]);
+
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value,
+  }));
+
+  // Win bounce
+  const winScale = useSharedValue(1);
+  useEffect(() => {
+    if (player?.winAmount && player.winAmount > 0) {
+      winScale.value = withSequence(
+        withSpring(1.2, { damping: 6, stiffness: 200 }),
+        withSpring(1, { damping: 10, stiffness: 150 })
+      );
+    }
+  }, [player?.winAmount]);
+
+  const winStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: winScale.value }],
+  }));
+
   // Empty seat
   if (!player) {
     return (
@@ -42,10 +84,10 @@ export function PlayerSeat({
         onPress={onSit}
         activeOpacity={0.7}
       >
-        <View style={styles.emptySeatInner}>
+        <Animated.View entering={FadeIn.duration(300).delay(seatIndex * 50)} style={styles.emptySeatInner}>
           <Text style={styles.emptySeatText}>+</Text>
           <Text style={styles.emptySeatLabel}>Sit</Text>
-        </View>
+        </Animated.View>
       </TouchableOpacity>
     );
   }
@@ -55,13 +97,16 @@ export function PlayerSeat({
   const isWinner = player.winAmount > 0;
 
   return (
-    <View style={[
-      styles.seat,
-      { left, top },
-      isCurrentPlayer && styles.activeSeat,
-      isFolded && styles.foldedSeat,
-      isWinner && styles.winnerSeat,
-    ]}>
+    <Animated.View
+      entering={FadeIn.duration(300).delay(seatIndex * 60)}
+      style={[
+        styles.seat,
+        { left, top },
+        isCurrentPlayer && styles.activeSeat,
+        isFolded && styles.foldedSeat,
+        isWinner && styles.winnerSeat,
+      ]}
+    >
       {/* Player cards (visible for hero or showdown) */}
       {player.cards.length > 0 && (
         <View style={[
@@ -75,6 +120,7 @@ export function PlayerSeat({
               size={isHero ? 'md' : 'sm'}
               faceDown={card.code === '??'}
               dimmed={isFolded}
+              delay={idx * 150}
               style={idx > 0 ? { marginLeft: isHero ? -16 : -12 } : undefined}
             />
           ))}
@@ -82,7 +128,11 @@ export function PlayerSeat({
       )}
 
       {/* Avatar & Info */}
-      <View style={[styles.playerInfo, isCurrentPlayer && styles.playerInfoActive]}>
+      <Animated.View style={[
+        styles.playerInfo,
+        isCurrentPlayer && styles.playerInfoActive,
+        isCurrentPlayer ? glowStyle : undefined,
+      ]}>
         <Avatar
           name={player.name}
           avatar={player.avatar}
@@ -105,45 +155,54 @@ export function PlayerSeat({
             {isAllIn ? 'ALL IN' : formatChips(player.chips)}
           </Text>
         </View>
-      </View>
+      </Animated.View>
 
       {/* Current bet */}
       {player.currentBet > 0 && (
-        <View style={styles.betBubble}>
+        <Animated.View entering={ZoomIn.duration(200).springify()} style={styles.betBubble}>
           <Text style={styles.betAmount}>{formatChips(player.currentBet)}</Text>
-        </View>
+        </Animated.View>
       )}
 
       {/* Last action badge */}
       {player.lastAction && !isFolded && (
-        <View style={[styles.actionBadge, getActionStyle(player.lastAction)]}>
+        <Animated.View
+          entering={ZoomIn.duration(200).springify().damping(12)}
+          style={[styles.actionBadge, getActionStyle(player.lastAction)]}
+        >
           <Text style={styles.actionText}>
             {player.lastAction.toUpperCase()}
           </Text>
-        </View>
+        </Animated.View>
       )}
 
       {/* Win amount */}
       {isWinner && (
-        <View style={styles.winBadge}>
+        <Animated.View
+          entering={BounceIn.duration(500)}
+          style={[styles.winBadge, winStyle]}
+        >
           <Text style={styles.winText}>+{formatChips(player.winAmount)}</Text>
-        </View>
+        </Animated.View>
       )}
 
       {/* Timer bar */}
       {isCurrentPlayer && (
         <View style={styles.timerBar}>
-          <View style={styles.timerProgress} />
+          <Animated.View style={[styles.timerProgress, glowStyle]} />
         </View>
       )}
 
       {/* Blind indicator */}
       {(player.isSmallBlind || player.isBigBlind) && (
-        <View style={[styles.blindBadge, player.isBigBlind ? styles.bbBadge : styles.sbBadge]}>
+        <Animated.View
+          entering={FadeIn.duration(200)}
+          style={[styles.blindBadge, player.isBigBlind ? styles.bbBadge : styles.sbBadge]}
+        >
           <Text style={styles.blindText}>{player.isBigBlind ? 'BB' : 'SB'}</Text>
-        </View>
+        </Animated.View>
       )}
-    </View>
+    </Animated.View>
   );
 }
 

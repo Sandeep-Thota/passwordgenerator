@@ -4,6 +4,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { Card } from '../../engine/types';
 import { PlayingCard } from './Card';
 import { Colors, Spacing, FontSize, BorderRadius, Shadows } from '../../constants/theme';
@@ -17,11 +18,11 @@ export function CommunityCards({ cards, phase }: CommunityCardsProps) {
   if (phase === 'waiting' || phase === 'pre-flop') {
     return (
       <View style={styles.container}>
-        <View style={styles.placeholder}>
+        <Animated.View entering={FadeIn.duration(400)} style={styles.placeholder}>
           <Text style={styles.placeholderText}>
             {phase === 'waiting' ? 'Waiting for players...' : 'Pre-flop'}
           </Text>
-        </View>
+        </Animated.View>
       </View>
     );
   }
@@ -29,12 +30,13 @@ export function CommunityCards({ cards, phase }: CommunityCardsProps) {
   return (
     <View style={styles.container}>
       <View style={styles.cardsRow}>
-        {/* Render existing cards */}
+        {/* Render existing cards with staggered animation */}
         {cards.map((card, index) => (
           <PlayingCard
             key={`${card.code}-${index}`}
             card={card}
             size="lg"
+            delay={index < 3 ? index * 120 : (index - 3) * 200 + 100}
             style={styles.card}
           />
         ))}

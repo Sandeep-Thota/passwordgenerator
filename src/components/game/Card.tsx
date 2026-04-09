@@ -4,7 +4,8 @@
 // Beautiful, animated playing cards with face-up/face-down states
 
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import Animated, { FadeIn, FlipInYRight } from 'react-native-reanimated';
 import { Card as CardType } from '../../engine/types';
 import { Colors, BorderRadius, Shadows } from '../../constants/theme';
 import { SUIT_SYMBOLS, SUIT_COLORS, RANK_DISPLAY } from '../../constants/cards';
@@ -15,6 +16,7 @@ interface CardProps {
   faceDown?: boolean;
   highlighted?: boolean;
   dimmed?: boolean;
+  delay?: number;
   style?: any;
 }
 
@@ -31,6 +33,7 @@ export function PlayingCard({
   faceDown = false,
   highlighted = false,
   dimmed = false,
+  delay = 0,
   style,
 }: CardProps) {
   const dims = CARD_SIZES[size];
@@ -38,21 +41,24 @@ export function PlayingCard({
 
   if (isHidden) {
     return (
-      <View style={[
-        styles.card,
-        {
-          width: dims.width,
-          height: dims.height,
-          backgroundColor: Colors.cardBack,
-        },
-        style,
-      ]}>
+      <Animated.View
+        entering={FadeIn.duration(250).delay(delay)}
+        style={[
+          styles.card,
+          {
+            width: dims.width,
+            height: dims.height,
+            backgroundColor: Colors.cardBack,
+          },
+          style,
+        ]}
+      >
         <View style={styles.cardBackInner}>
           <View style={styles.cardBackPattern}>
             <Text style={[styles.cardBackLogo, { fontSize: dims.suitSize + 4 }]}>PZ</Text>
           </View>
         </View>
-      </View>
+      </Animated.View>
     );
   }
 
@@ -61,17 +67,20 @@ export function PlayingCard({
   const rankText = RANK_DISPLAY[card.rank] || card.rank;
 
   return (
-    <View style={[
-      styles.card,
-      {
-        width: dims.width,
-        height: dims.height,
-        backgroundColor: Colors.cardWhite,
-      },
-      highlighted && styles.highlighted,
-      dimmed && styles.dimmed,
-      style,
-    ]}>
+    <Animated.View
+      entering={FlipInYRight.duration(350).delay(delay).springify().damping(14)}
+      style={[
+        styles.card,
+        {
+          width: dims.width,
+          height: dims.height,
+          backgroundColor: Colors.cardWhite,
+        },
+        highlighted && styles.highlighted,
+        dimmed && styles.dimmed,
+        style,
+      ]}
+    >
       {/* Top-left rank & suit */}
       <View style={styles.cornerTop}>
         <Text style={[styles.rank, { fontSize: dims.fontSize, color: suitColor }]}>
@@ -98,7 +107,7 @@ export function PlayingCard({
           {rankText}
         </Text>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
