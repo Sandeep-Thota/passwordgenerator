@@ -576,7 +576,16 @@ export class PokerGame {
   }
 
   private runOutBoard(): void {
-    // Deal remaining community cards
+    // Check if Run It Twice is enabled and all remaining players are all-in
+    const nonFolded = this.getNonFoldedPlayers();
+    const allAllIn = nonFolded.every(p => p.isAllIn);
+
+    if (this.config.runItTwice && allAllIn && nonFolded.length >= 2) {
+      this.runItTwice();
+      return;
+    }
+
+    // Deal remaining community cards (single board)
     while (this.state.communityCards.length < 5) {
       if (this.state.communityCards.length === 0) {
         this.deck.burn();
@@ -587,6 +596,91 @@ export class PokerGame {
       }
     }
     this.showdown();
+  }
+
+  private runItTwice(): void {
+    const existingCards = [...this.state.communityCards];
+    const cardsNeeded = 5 - existingCards.length;
+
+    // Board 1: deal remaining cards
+    const board1Cards: Card[] = [];
+    for (let i = 0; i < cardsNeeded; i++) {
+      this.deck.burn();
+      board1Cards.push(this.deck.dealOne());
+    }
+    this.state.communityCards = [...existingCards, ...board1Cards];
+
+    // Board 2: deal another set of remaining cards
+    const board2Cards: Card[] = [];
+    for (let i = 0; i < cardsNeeded; i++) {
+      this.deck.burn();
+      board2Cards.push(this.deck.dealOne());
+    }
+    const board2 = [...existingCards, ...board2Cards];
+
+    // Showdown with split pots
+    this.state.phase = 'showdown';
+    const nonFolded = this.getNonFoldedPlayers();
+
+    for (const player of nonFolded) {
+      player.showCards = true;
+    }
+
+    const allWinners: { playerId: string; amount: number; hand?: HandResult }[] = [];
+    const board2Winners: { playerId: string; amount: number; hand?: HandResult }[] = [];
+
+    // Award each pot split 50/50 between the two boards
+    for (const pot of this.state.pots) {
+      const eligiblePlayers = nonFolded.filter(p => pot.eligiblePlayerIds.includes(p.id));
+      if (eligiblePlayers.length === 0) continue;
+
+      const halfPot1 = Math.ceil(pot.amount / 2);
+      const halfPot2 = pot.amount - halfPot1;
+
+      // Board 1 winners
+      this.awardPotToWinners(eligiblePlayers, this.state.communityCards, halfPot1, pot, allWinners);
+
+      // Board 2 winners
+      this.awardPotToWinners(eligiblePlayers, board2, halfPot2, pot, board2Winners);
+    }
+
+    this.state.winners = allWinners;
+    this.state.runItTwice = { board2, winners2: board2Winners };
+
+    this.recordHand();
+    this.state.phase = 'finished';
+  }
+
+  private awardPotToWinners(
+    eligiblePlayers: Player[],
+    communityCards: Card[],
+    potAmount: number,
+    pot: Pot,
+    winnersArray: { playerId: string; amount: number; hand?: HandResult }[],
+  ): void {
+    if (eligiblePlayers.length === 1) {
+      eligiblePlayers[0].chips += potAmount;
+      eligiblePlayers[0].winAmount += potAmount;
+      winnersArray.push({ playerId: eligiblePlayers[0].id, amount: potAmount });
+      return;
+    }
+
+    const winners = determineWinners(
+      eligiblePlayers.map(p => ({ id: p.id, holeCards: p.cards })),
+      communityCards,
+      this.config.variant
+    );
+
+    const share = Math.floor(potAmount / winners.length);
+    const remainder = potAmount - share * winners.length;
+
+    winners.forEach((winner, index) => {
+      const player = this.state.players.find(p => p.id === winner.playerId)!;
+      const winAmount = share + (index === 0 ? remainder : 0);
+      player.chips += winAmount;
+      player.winAmount += winAmount;
+      winnersArray.push({ playerId: winner.playerId, amount: winAmount, hand: winner.hand });
+    });
   }
 
   private showdown(): void {

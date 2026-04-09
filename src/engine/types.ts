@@ -91,6 +91,11 @@ export interface GameState {
   handNumber: number;
   lastAction?: { playerId: string; action: PlayerAction; amount?: number };
   winners?: { playerId: string; amount: number; hand?: HandResult }[];
+  // Run It Twice: second board and results
+  runItTwice?: {
+    board2: Card[];
+    winners2: { playerId: string; amount: number; hand?: HandResult }[];
+  };
 }
 
 export interface RoomConfig {
