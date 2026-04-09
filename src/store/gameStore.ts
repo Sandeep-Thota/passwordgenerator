@@ -3,10 +3,12 @@
 // ==========================================
 
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import {
   GameState, Room, ChatMessage, PlayerAction,
   PlayerActionRequest, HandRecord, GamePhase,
 } from '../engine/types';
+import { zustandStorage } from '../utils/storage';
 
 interface GameStore {
   // Connection state
@@ -55,54 +57,63 @@ interface GameStore {
   reset: () => void;
 }
 
-export const useGameStore = create<GameStore>((set) => ({
-  isConnected: false,
-  setConnected: (connected) => set({ isConnected: connected }),
+export const useGameStore = create<GameStore>()(
+  persist(
+    (set) => ({
+      isConnected: false,
+      setConnected: (connected) => set({ isConnected: connected }),
 
-  currentRoom: null,
-  setCurrentRoom: (room) => set({ currentRoom: room }),
+      currentRoom: null,
+      setCurrentRoom: (room) => set({ currentRoom: room }),
 
-  gameState: null,
-  setGameState: (state) => set({ gameState: state }),
+      gameState: null,
+      setGameState: (state) => set({ gameState: state }),
 
-  playerId: '',
-  setPlayerId: (id) => set({ playerId: id }),
+      playerId: '',
+      setPlayerId: (id) => set({ playerId: id }),
 
-  chatMessages: [],
-  addChatMessage: (message) => set((state) => ({
-    chatMessages: [...state.chatMessages.slice(-199), message],
-  })),
-  clearChat: () => set({ chatMessages: [] }),
+      chatMessages: [],
+      addChatMessage: (message) => set((state) => ({
+        chatMessages: [...state.chatMessages.slice(-199), message],
+      })),
+      clearChat: () => set({ chatMessages: [] }),
 
-  validActions: [],
-  minBet: 0,
-  maxBet: 0,
-  setActionRequired: (actions, minBet, maxBet) => set({ validActions: actions, minBet, maxBet }),
-  clearActions: () => set({ validActions: [], minBet: 0, maxBet: 0 }),
+      validActions: [],
+      minBet: 0,
+      maxBet: 0,
+      setActionRequired: (actions, minBet, maxBet) => set({ validActions: actions, minBet, maxBet }),
+      clearActions: () => set({ validActions: [], minBet: 0, maxBet: 0 }),
 
-  handHistory: [],
-  addHandRecord: (record) => set((state) => ({
-    handHistory: [...state.handHistory, record],
-  })),
+      handHistory: [],
+      addHandRecord: (record) => set((state) => ({
+        handHistory: [...state.handHistory, record],
+      })),
 
-  isChatExpanded: false,
-  toggleChat: () => set((state) => ({ isChatExpanded: !state.isChatExpanded })),
-  showHandHistory: false,
-  toggleHandHistory: () => set((state) => ({ showHandHistory: !state.showHandHistory })),
+      isChatExpanded: false,
+      toggleChat: () => set((state) => ({ isChatExpanded: !state.isChatExpanded })),
+      showHandHistory: false,
+      toggleHandHistory: () => set((state) => ({ showHandHistory: !state.showHandHistory })),
 
-  lastWinners: [],
-  setLastWinners: (winners) => set({ lastWinners: winners }),
+      lastWinners: [],
+      setLastWinners: (winners) => set({ lastWinners: winners }),
 
-  reset: () => set({
-    currentRoom: null,
-    gameState: null,
-    chatMessages: [],
-    validActions: [],
-    minBet: 0,
-    maxBet: 0,
-    handHistory: [],
-    isChatExpanded: false,
-    showHandHistory: false,
-    lastWinners: [],
-  }),
-}));
+      reset: () => set({
+        currentRoom: null,
+        gameState: null,
+        chatMessages: [],
+        validActions: [],
+        minBet: 0,
+        maxBet: 0,
+        handHistory: [],
+        isChatExpanded: false,
+        showHandHistory: false,
+        lastWinners: [],
+      }),
+    }),
+    {
+      name: 'pokerzone-game',
+      storage: createJSONStorage(() => zustandStorage),
+      partialize: (state) => ({ handHistory: state.handHistory }),
+    },
+  ),
+);

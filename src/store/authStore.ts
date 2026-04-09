@@ -3,8 +3,10 @@
 // ==========================================
 
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { generateGuestName } from '../utils/formatters';
 import { AVATARS } from '../constants/theme';
+import { zustandStorage } from '../utils/storage';
 
 interface PlayerStats {
   handsPlayed: number;
@@ -47,41 +49,49 @@ interface AuthStore {
   initGuest: () => void;
 }
 
-export const useAuthStore = create<AuthStore>((set) => ({
-  playerName: '',
-  setPlayerName: (name) => set({ playerName: name }),
-  avatar: 'ace',
-  setAvatar: (avatar) => set({ avatar }),
+export const useAuthStore = create<AuthStore>()(
+  persist(
+    (set) => ({
+      playerName: '',
+      setPlayerName: (name) => set({ playerName: name }),
+      avatar: 'ace',
+      setAvatar: (avatar) => set({ avatar }),
 
-  stats: {
-    handsPlayed: 0,
-    handsWon: 0,
-    biggestPot: 0,
-    totalWinnings: 0,
-    bestHand: 'None',
-    gamesJoined: 0,
-    tournamentsWon: 0,
-  },
-  updateStats: (updates) => set((state) => ({
-    stats: { ...state.stats, ...updates },
-  })),
+      stats: {
+        handsPlayed: 0,
+        handsWon: 0,
+        biggestPot: 0,
+        totalWinnings: 0,
+        bestHand: 'None',
+        gamesJoined: 0,
+        tournamentsWon: 0,
+      },
+      updateStats: (updates) => set((state) => ({
+        stats: { ...state.stats, ...updates },
+      })),
 
-  soundEnabled: true,
-  setSoundEnabled: (enabled) => set({ soundEnabled: enabled }),
-  hapticEnabled: true,
-  setHapticEnabled: (enabled) => set({ hapticEnabled: enabled }),
-  showHandStrength: false,
-  setShowHandStrength: (show) => set({ showHandStrength: show }),
-  autoMuck: true,
-  setAutoMuck: (muck) => set({ autoMuck: muck }),
-  fourColorDeck: false,
-  setFourColorDeck: (enabled) => set({ fourColorDeck: enabled }),
+      soundEnabled: true,
+      setSoundEnabled: (enabled) => set({ soundEnabled: enabled }),
+      hapticEnabled: true,
+      setHapticEnabled: (enabled) => set({ hapticEnabled: enabled }),
+      showHandStrength: false,
+      setShowHandStrength: (show) => set({ showHandStrength: show }),
+      autoMuck: true,
+      setAutoMuck: (muck) => set({ autoMuck: muck }),
+      fourColorDeck: false,
+      setFourColorDeck: (enabled) => set({ fourColorDeck: enabled }),
 
-  theme: 'dark',
-  setTheme: (theme) => set({ theme }),
+      theme: 'dark',
+      setTheme: (theme) => set({ theme }),
 
-  initGuest: () => set({
-    playerName: generateGuestName(),
-    avatar: AVATARS[Math.floor(Math.random() * AVATARS.length)],
-  }),
-}));
+      initGuest: () => set({
+        playerName: generateGuestName(),
+        avatar: AVATARS[Math.floor(Math.random() * AVATARS.length)],
+      }),
+    }),
+    {
+      name: 'pokerzone-auth',
+      storage: createJSONStorage(() => zustandStorage),
+    },
+  ),
+);
