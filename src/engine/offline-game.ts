@@ -330,21 +330,37 @@ export class OfflineGameManager {
   }
 
   private scheduleBotAction(botId: string): void {
-    if (this.isDestroyed || this.isProcessingBot) return;
-
-    this.isProcessingBot = true;
+    if (this.isDestroyed) return;
 
     const [delayMin, delayMax] = this.config.botDelayRange ?? [DEFAULT_BOT_DELAY_MIN, DEFAULT_BOT_DELAY_MAX];
     const delay = delayMin + Math.floor(Math.random() * (delayMax - delayMin));
 
     const timer = setTimeout(() => {
-      if (this.isDestroyed) {
-        this.isProcessingBot = false;
-        return;
-      }
+      if (this.isDestroyed) return;
 
-      this.executeBotAction(botId);
-      this.isProcessingBot = false;
+      try {
+        this.executeBotAction(botId);
+      } catch (error) {
+        // If bot action crashes, force a fold/check and continue
+        console.warn(`Bot ${botId} action error, using fallback:`, error);
+        try {
+          const validActions = this.game.getValidActions(botId);
+          const fallback: PlayerActionRequest = validActions.actions.includes('check')
+            ? { action: 'check' }
+            : { action: 'fold' };
+          this.game.processAction(botId, fallback);
+          this.emitStateChange();
+          const state = this.game.getState();
+          if (state.phase === 'finished' || state.phase === 'showdown') {
+            this.handleHandComplete();
+          } else {
+            this.processCurrentTurn();
+          }
+        } catch {
+          // Last resort: skip this bot's turn entirely
+          this.processCurrentTurn();
+        }
+      }
     }, delay);
 
     this.botTimers.push(timer);
@@ -354,28 +370,51 @@ export class OfflineGameManager {
     if (this.isDestroyed) return;
 
     const botConfig = this.bots.get(botId);
-    if (!botConfig) return;
+    if (!botConfig) {
+      this.processCurrentTurn();
+      return;
+    }
 
     // Verify it's still this bot's turn (state may have changed)
     const currentPlayerId = this.game.getCurrentPlayerId();
-    if (currentPlayerId !== botId) return;
+    if (currentPlayerId !== botId) {
+      // Not this bot's turn anymore — re-check whose turn it is
+      this.processCurrentTurn();
+      return;
+    }
 
     const state = this.game.getState();
     const player = state.players.find(p => p.id === botId);
-    if (!player) return;
+    if (!player) {
+      this.processCurrentTurn();
+      return;
+    }
 
     const validActions = this.game.getValidActions(botId);
-    if (validActions.actions.length === 0) return;
+    if (validActions.actions.length === 0) {
+      this.processCurrentTurn();
+      return;
+    }
 
     // Get the bot's decision
-    const action = getBotAction(
-      botConfig,
-      player,
-      state,
-      validActions.actions,
-      validActions.minBet,
-      validActions.maxBet
-    );
+    let action: PlayerActionRequest;
+    try {
+      action = getBotAction(
+        botConfig,
+        player,
+        state,
+        validActions.actions,
+        validActions.minBet,
+        validActions.maxBet
+      );
+    } catch {
+      // Bot logic crashed — use safe fallback
+      action = validActions.actions.includes('check')
+        ? { action: 'check' }
+        : validActions.actions.includes('call')
+        ? { action: 'call' }
+        : { action: 'fold' };
+    }
 
     // Execute the action
     const success = this.game.processAction(botId, action);
