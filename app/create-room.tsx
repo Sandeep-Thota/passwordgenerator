@@ -18,6 +18,7 @@ import { Input } from '../src/components/ui/Input';
 import { Button } from '../src/components/ui/Button';
 import { useSocket } from '../src/hooks/useSocket';
 import { useAuthStore } from '../src/store/authStore';
+import { useGameStore } from '../src/store/gameStore';
 import { GameVariant, BettingStructure, RoomConfig } from '../src/engine/types';
 import { generateRoomName } from '../src/utils/formatters';
 
@@ -39,8 +40,21 @@ export default function CreateRoomScreen() {
 
   const { createRoom, joinRoom } = useSocket();
   const { playerName, avatar } = useAuthStore();
+  const { isConnected } = useGameStore();
 
   const handleCreate = async () => {
+    if (!isConnected) {
+      Alert.alert(
+        'Server Not Available',
+        'The multiplayer server is not running. Would you like to play Solo Practice against AI bots instead?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Solo Practice', onPress: () => router.replace('/solo-play') },
+        ]
+      );
+      return;
+    }
+
     setIsCreating(true);
     try {
       const config: RoomConfig = {
@@ -65,7 +79,14 @@ export default function CreateRoomScreen() {
       await joinRoom(room.code, playerName, avatar, config.minBuyIn);
       router.replace(`/game/${room.code}`);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Could not create room');
+      Alert.alert(
+        'Connection Error',
+        'Could not connect to the server. Try Solo Practice instead?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Solo Practice', onPress: () => router.replace('/solo-play') },
+        ]
+      );
     } finally {
       setIsCreating(false);
     }

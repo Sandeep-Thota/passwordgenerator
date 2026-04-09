@@ -57,6 +57,10 @@ export default function LobbyScreen() {
 
   const handleJoinByCode = async () => {
     if (!joinCode.trim()) return;
+    if (!isConnected) {
+      Alert.alert('Server Not Available', 'The multiplayer server is not running. Try Solo Practice instead!');
+      return;
+    }
     try {
       const room = await joinRoom(joinCode.trim(), playerName, avatar, 1000);
       router.push(`/game/${room.code}`);
