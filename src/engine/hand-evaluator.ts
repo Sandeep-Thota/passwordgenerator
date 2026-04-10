@@ -265,6 +265,19 @@ export function evaluateHand(
   }
 
   const allCards = [...holeCards, ...communityCards];
+
+  // Need at least 5 cards to evaluate
+  if (allCards.length < 5) {
+    // Return a basic high-card result from available cards
+    const sorted = [...allCards].sort((a, b) => getRankValue(b.rank) - getRankValue(a.rank));
+    return {
+      rank: 'High Card',
+      score: sorted.reduce((s, c, i) => s + getRankValue(c.rank) * Math.pow(100, 4 - i), 10000000000),
+      cards: sorted,
+      description: sorted.length > 0 ? `${sorted[0].rank} high` : 'No cards',
+    };
+  }
+
   const combos = combinations(allCards, 5);
 
   let bestResult: HandResult | null = null;
